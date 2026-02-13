@@ -26,30 +26,45 @@ function App() {
     const [showTaskForm, setShowTaskForm] = useState(false);
     const [showProjectForm, setShowProjectForm] = useState(false);
     const [lastToggledTask, setLastToggledTask] = useState(null);
+    const [projects, setProjects] = useState([]);
 
     useEffect(() => {
-        fetchProject();
+        fetchAllProjects();
     }, []);
 
-    const fetchProject = async () => {
+    const fetchAllProjects = async () => {
         try {
-            setLoading(true);
             const res = await axios.get(`${API_BASE}/projects`);
-            if (res.data.length > 0) {
-                // Get the most recent project (with the highest ID)
+            setProjects(res.data);
+            if (res.data.length > 0 && !project) {
                 const latest = res.data.reduce((prev, current) => (prev.id > current.id) ? prev : current);
-                const projectRes = await axios.get(`${API_BASE}/projects/${latest.id}`);
-                setProject(projectRes.data);
-                setError(null);
-            } else {
+                fetchProjectDetail(latest.id);
+            } else if (res.data.length === 0) {
                 setShowProjectForm(true);
             }
         } catch (err) {
             console.error(err);
             setError("Connect to backend to see your projects.");
+        }
+    };
+
+    const fetchProjectDetail = async (projectId) => {
+        try {
+            setLoading(true);
+            const res = await axios.get(`${API_BASE}/projects/${projectId}`);
+            setProject(res.data);
+            setSuggestedTask(null);
+            setError(null);
+        } catch (err) {
+            console.error(err);
         } finally {
             setLoading(false);
         }
+    };
+
+    const fetchProject = () => {
+        if (project) fetchProjectDetail(project.id);
+        fetchAllProjects();
     };
 
     const handleToggleTask = async (taskId) => {
@@ -111,186 +126,225 @@ function App() {
     }
 
     return (
-        <div className="container">
-            <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', minHeight: '100vh' }}>
+            {/* Sidebar */}
+            <aside style={{
+                width: '280px',
+                background: 'rgba(15, 23, 42, 0.9)',
+                borderRight: '1px solid var(--card-border)',
+                padding: '2rem 1.5rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2rem'
+            }}>
                 <div>
-                    <h1 style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>{project.title}</h1>
-                    <p style={{ color: 'var(--text-secondary)', maxWidth: '600px' }}>{project.description}</p>
-                </div>
-                <div className={`badge badge-${project.pace_status.toLowerCase().replace(' ', '')}`}>
-                    {project.pace_status}
-                </div>
-            </header>
-
-            <div className="grid grid-cols-3" style={{ marginBottom: '2rem' }}>
-                <StatCard
-                    icon={<Target color="var(--accent-primary)" />}
-                    label="Progress"
-                    value={`${project.completion_percentage}%`}
-                    subtext={`${project.completed_tasks} / ${project.total_tasks} Tasks`}
-                />
-                <StatCard
-                    icon={<Clock color="var(--accent-secondary)" />}
-                    label="Days Remaining"
-                    value={project.days_left}
-                    subtext={`Deadline: ${format(new Date(project.deadline), 'MMM dd, yyyy')}`}
-                />
-                <StatCard
-                    icon={<TrendingUp color="var(--success)" />}
-                    label="Pace"
-                    value={`${project.avg_tasks_per_day}`}
-                    subtext="Avg tasks / day"
-                />
-            </div>
-
-            <div style={{ marginBottom: '2rem' }}>
-                <div className="progress-bar">
-                    <div className="progress-fill" style={{ width: `${project.completion_percentage}%` }}></div>
-                </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2rem' }}>
-                <section className="glass">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                        <h2>Tasks</h2>
-                        <button className="btn btn-secondary" onClick={() => setShowTaskForm(true)}>
-                            <Plus size={18} /> Add Task
+                    <h3 style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.1em', marginBottom: '1rem' }}>
+                        Your Projects
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {projects.map(p => (
+                            <button
+                                key={p.id}
+                                onClick={() => fetchProjectDetail(p.id)}
+                                className={`btn ${project?.id === p.id ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{ justifyContent: 'flex-start', textAlign: 'left', width: '100%', padding: '0.8rem 1rem' }}
+                            >
+                                {p.title}
+                            </button>
+                        ))}
+                        <button
+                            onClick={() => setShowProjectForm(true)}
+                            className="btn btn-secondary"
+                            style={{ borderStyle: 'dashed', marginTop: '1rem' }}
+                        >
+                            <Plus size={18} /> New Project
                         </button>
                     </div>
+                </div>
+            </aside>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        {project.tasks.length === 0 && (
-                            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem' }}>No tasks yet. Start by adding one!</p>
-                        )}
-                        {project.tasks.map(task => (
-                            <div
-                                key={task.id}
-                                className={`task-card ${task.status ? 'task-completed' : ''}`}
-                                style={{ cursor: 'pointer' }}
-                                onClick={(e) => {
-                                    // Don't trigger if clicking the toggle button
-                                    if (e.target.closest('.toggle-btn')) return;
-                                    setViewingTask(task);
-                                }}
-                            >
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleTask(task.id);
-                                    }}
-                                    className="toggle-btn"
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: task.status ? 'var(--success)' : 'var(--text-secondary)' }}
-                                >
-                                    {task.status ? <CheckCircle2 size={24} /> : <Circle size={24} />}
-                                </button>
-                                <div style={{ flex: 1 }}>
-                                    <h4 style={{ fontSize: '1.1rem' }}>{task.title}</h4>
-                                    <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                                        <span>Impact: {task.impact_score}/5</span>
-                                        <span>Effort: {task.effort_score}/5</span>
-                                        <span>{task.estimated_hours}h</span>
-                                        {task.deadline && (
-                                            <span>Due: {format(new Date(task.deadline), 'MMM dd')}</span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+            {/* Main Content */}
+            <main className="container" style={{ flex: 1, margin: 0, maxWidth: 'none' }}>
+                <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                        <h1 style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>{project.title}</h1>
+                        <p style={{ color: 'var(--text-secondary)', maxWidth: '600px' }}>{project.description}</p>
                     </div>
-                </section>
+                    <div className={`badge badge-${project.pace_status.toLowerCase().replace(' ', '')}`}>
+                        {project.pace_status}
+                    </div>
+                </header>
 
-                <aside>
-                    <div className="glass" style={{ marginBottom: '2rem', border: '1px solid var(--accent-primary)' }}>
-                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                            <Zap size={20} color="var(--warning)" fill="var(--warning)" />
-                            Next Best Action
-                        </h3>
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
-                                How much time do you have? (hours)
-                            </label>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <input
-                                    type="number"
-                                    className="input"
-                                    value={availableHours}
-                                    onChange={(e) => setAvailableHours(e.target.value)}
-                                />
-                                <button onClick={getSuggestion} className="btn btn-primary">Score</button>
-                            </div>
+                <div className="grid grid-cols-3" style={{ marginBottom: '2rem' }}>
+                    <StatCard
+                        icon={<Target color="var(--accent-primary)" />}
+                        label="Progress"
+                        value={`${project.completion_percentage}%`}
+                        subtext={`${project.completed_tasks} / ${project.total_tasks} Tasks`}
+                    />
+                    <StatCard
+                        icon={<Clock color="var(--accent-secondary)" />}
+                        label="Days Remaining"
+                        value={project.days_left}
+                        subtext={`Deadline: ${format(new Date(project.deadline), 'MMM dd, yyyy')}`}
+                    />
+                    <StatCard
+                        icon={<TrendingUp color="var(--success)" />}
+                        label="Pace"
+                        value={`${project.avg_tasks_per_day}`}
+                        subtext="Avg tasks / day"
+                    />
+                </div>
+
+                <div style={{ marginBottom: '2rem' }}>
+                    <div className="progress-bar">
+                        <div className="progress-fill" style={{ width: `${project.completion_percentage}%` }}></div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2rem' }}>
+                    <section className="glass">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <h2>Tasks</h2>
+                            <button className="btn btn-secondary" onClick={() => setShowTaskForm(true)}>
+                                <Plus size={18} /> Add Task
+                            </button>
                         </div>
 
-                        {suggestedTask ? (
-                            <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '0.5rem' }}>
-                                <h4 style={{ color: 'var(--accent-primary)', marginBottom: '0.5rem' }}>{suggestedTask.title}</h4>
-                                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{suggestedTask.description}</p>
-                                <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ fontSize: '0.8rem' }}>Est: {suggestedTask.estimated_hours}h</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            {project.tasks.length === 0 && (
+                                <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem' }}>No tasks yet. Start by adding one!</p>
+                            )}
+                            {project.tasks.map(task => (
+                                <div
+                                    key={task.id}
+                                    className={`task-card ${task.status ? 'task-completed' : ''}`}
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={(e) => {
+                                        // Don't trigger if clicking the toggle button
+                                        if (e.target.closest('.toggle-btn')) return;
+                                        setViewingTask(task);
+                                    }}
+                                >
                                     <button
-                                        onClick={() => handleToggleTask(suggestedTask.id).then(() => setSuggestedTask(null))}
-                                        className="btn btn-secondary"
-                                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleToggleTask(task.id);
+                                        }}
+                                        className="toggle-btn"
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: task.status ? 'var(--success)' : 'var(--text-secondary)' }}
                                     >
-                                        Done
+                                        {task.status ? <CheckCircle2 size={24} /> : <Circle size={24} />}
                                     </button>
+                                    <div style={{ flex: 1 }}>
+                                        <h4 style={{ fontSize: '1.1rem' }}>{task.title}</h4>
+                                        <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                                            <span>Impact: {task.impact_score}/5</span>
+                                            <span>Effort: {task.effort_score}/5</span>
+                                            <span>{task.estimated_hours}h</span>
+                                            {task.deadline && (
+                                                <span>Due: {format(new Date(task.deadline), 'MMM dd')}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    <aside>
+                        <div className="glass" style={{ marginBottom: '2rem', border: '1px solid var(--accent-primary)' }}>
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                                <Zap size={20} color="var(--warning)" fill="var(--warning)" />
+                                Next Best Action
+                            </h3>
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>
+                                    How much time do you have? (hours)
+                                </label>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <input
+                                        type="number"
+                                        className="input"
+                                        value={availableHours}
+                                        onChange={(e) => setAvailableHours(e.target.value)}
+                                    />
+                                    <button onClick={getSuggestion} className="btn btn-primary">Score</button>
                                 </div>
                             </div>
-                        ) : (
-                            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
-                                Enter availability and click Score to see what to do next.
-                            </p>
-                        )}
-                    </div>
-                </aside>
-            </div>
 
-            {showTaskForm && (
-                <TaskModal
-                    projectId={project.id}
-                    onClose={() => setShowTaskForm(false)}
-                    onCreated={() => { setShowTaskForm(false); fetchProject(); }}
-                />
-            )}
-
-            {viewingTask && (
-                <GuidanceModal
-                    task={viewingTask}
-                    onClose={() => setViewingTask(null)}
-                />
-            )}
-
-            {lastToggledTask && (
-                <div style={{
-                    position: 'fixed',
-                    bottom: '2rem',
-                    right: '2rem',
-                    background: 'var(--accent-primary)',
-                    color: 'white',
-                    padding: '1rem 1.5rem',
-                    borderRadius: '0.75rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '1rem',
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                    zIndex: 100,
-                    animation: 'slideUp 0.3s ease-out'
-                }}>
-                    <span>Task marked as complete!</span>
-                    <button
-                        onClick={handleUndo}
-                        className="btn"
-                        style={{ background: 'white', color: 'var(--accent-primary)', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                    >
-                        Undo
-                    </button>
-                    <button
-                        onClick={() => setLastToggledTask(null)}
-                        style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.7 }}
-                    >
-                        ✕
-                    </button>
+                            {suggestedTask ? (
+                                <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '0.5rem' }}>
+                                    <h4 style={{ color: 'var(--accent-primary)', marginBottom: '0.5rem' }}>{suggestedTask.title}</h4>
+                                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{suggestedTask.description}</p>
+                                    <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ fontSize: '0.8rem' }}>Est: {suggestedTask.estimated_hours}h</span>
+                                        <button
+                                            onClick={() => handleToggleTask(suggestedTask.id).then(() => setSuggestedTask(null))}
+                                            className="btn btn-secondary"
+                                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                                    Enter availability and click Score to see what to do next.
+                                </p>
+                            )}
+                        </div>
+                    </aside>
                 </div>
-            )}
+
+                {showTaskForm && (
+                    <TaskModal
+                        projectId={project.id}
+                        onClose={() => setShowTaskForm(false)}
+                        onCreated={() => { setShowTaskForm(false); fetchProjectDetail(project.id); }}
+                    />
+                )}
+
+                {viewingTask && (
+                    <GuidanceModal
+                        task={viewingTask}
+                        onClose={() => setViewingTask(null)}
+                    />
+                )}
+
+                {lastToggledTask && (
+                    <div style={{
+                        position: 'fixed',
+                        bottom: '2rem',
+                        right: '2rem',
+                        background: 'var(--accent-primary)',
+                        color: 'white',
+                        padding: '1rem 1.5rem',
+                        borderRadius: '0.75rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                        zIndex: 100,
+                        animation: 'slideUp 0.3s ease-out'
+                    }}>
+                        <span>Task marked as complete!</span>
+                        <button
+                            onClick={handleUndo}
+                            className="btn"
+                            style={{ background: 'white', color: 'var(--accent-primary)', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                        >
+                            Undo
+                        </button>
+                        <button
+                            onClick={() => setLastToggledTask(null)}
+                            style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.7 }}
+                        >
+                            ✕
+                        </button>
+                    </div>
+                )}
+            </main>
         </div>
     );
 }
