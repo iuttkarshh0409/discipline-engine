@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 from typing import List
 from models import Task, Project, ProjectDetail, TaskRead
 
+from services import calculate_risk_model
+
 def calculate_project_stats(project: Project) -> ProjectDetail:
     now = datetime.utcnow()
     total_tasks = len(project.tasks)
@@ -11,41 +13,28 @@ def calculate_project_stats(project: Project) -> ProjectDetail:
     completion_percentage = (num_completed / total_tasks * 100) if total_tasks > 0 else 0
     
     days_left = (project.deadline.replace(tzinfo=None) - now).days
-    days_total = (project.deadline.replace(tzinfo=None) - project.start_date.replace(tzinfo=None)).days
-    days_passed = (now - project.start_date.replace(tzinfo=None)).days
-    
-    if days_passed <= 0:
-        days_passed = 1 # Avoid division by zero
-        
+    days_passed = max(1, (now - project.start_date.replace(tzinfo=None)).days)
     avg_tasks_per_day = num_completed / days_passed
     
-    # Pace calculation
-    remaining_tasks = total_tasks - num_completed
-    if days_left > 0:
-        required_pace = remaining_tasks / days_left
-    else:
-        required_pace = remaining_tasks if remaining_tasks > 0 else 0
-        
-    if remaining_tasks == 0:
-        pace_status = "On Track"
-    elif days_left <= 0:
-        pace_status = "Behind"
-    elif avg_tasks_per_day >= required_pace:
-        pace_status = "Ahead"
-    elif avg_tasks_per_day >= required_pace * 0.8:
-        pace_status = "On Track"
-    else:
-        pace_status = "Behind"
+    # Risk calculation
+    risk_score, risk_level = calculate_risk_model(project)
+    
+    pace_status = "On Track"
+    if risk_level == "High": pace_status = "Behind"
+    elif risk_score < 20: pace_status = "Ahead"
 
     return ProjectDetail(
         **project.dict(),
         tasks=[TaskRead(**t.dict()) for t in project.tasks],
+        milestones=[MilestoneRead(**m.dict()) for m in project.milestones],
         total_tasks=total_tasks,
         completed_tasks=num_completed,
         completion_percentage=round(completion_percentage, 2),
         days_left=max(0, days_left),
         pace_status=pace_status,
-        avg_tasks_per_day=round(avg_tasks_per_day, 2)
+        avg_tasks_per_day=round(avg_tasks_per_day, 2),
+        risk_level=risk_level,
+        risk_score=risk_score
     )
 
 def score_task(task: Task, available_hours: float) -> float:

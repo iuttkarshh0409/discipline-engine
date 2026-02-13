@@ -5,6 +5,9 @@ from sqlmodel import Field, SQLModel, Relationship
 class ProjectBase(SQLModel):
     title: str
     description: Optional[str] = None
+    context_notes: Optional[str] = None
+    roadmap_text: Optional[str] = None
+    architecture_notes: Optional[str] = None
     start_date: datetime = Field(default_factory=datetime.utcnow)
     deadline: datetime
 
@@ -13,6 +16,32 @@ class Project(ProjectBase, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     tasks: List["Task"] = Relationship(back_populates="project")
+    milestones: List["Milestone"] = Relationship(back_populates="project")
+    behavior_logs: List["BehaviorLog"] = Relationship(back_populates="project")
+
+class MilestoneBase(SQLModel):
+    title: str
+    description: Optional[str] = None
+    target_date: Optional[datetime] = None
+    weight: int = Field(default=3, ge=1, le=5)
+    status: bool = Field(default=False)
+    project_id: int = Field(foreign_key="project.id")
+
+class Milestone(MilestoneBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    project: Project = Relationship(back_populates="milestones")
+
+class BehaviorLog(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id")
+    task_id: Optional[int] = Field(default=None, foreign_key="task.id")
+    action_type: str = "completion" # completion, work_session
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    duration_minutes: Optional[int] = None
+
+    project: Project = Relationship(back_populates="behavior_logs")
 
 class TaskBase(SQLModel):
     title: str
@@ -24,6 +53,7 @@ class TaskBase(SQLModel):
     deadline: Optional[datetime] = None
     status: bool = Field(default=False)
     project_id: int = Field(foreign_key="project.id")
+    milestone_id: Optional[int] = Field(default=None, foreign_key="milestone.id")
 
 class Task(TaskBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -36,6 +66,10 @@ class ProjectRead(ProjectBase):
     id: int
     created_at: datetime
 
+class MilestoneRead(MilestoneBase):
+    id: int
+    created_at: datetime
+
 class TaskRead(TaskBase):
     id: int
     completed_at: Optional[datetime]
@@ -43,9 +77,12 @@ class TaskRead(TaskBase):
 
 class ProjectDetail(ProjectRead):
     tasks: List[TaskRead] = []
+    milestones: List[MilestoneRead] = []
     total_tasks: int = 0
     completed_tasks: int = 0
     completion_percentage: float = 0
     days_left: int = 0
-    pace_status: str = "On Track" # Ahead, On Track, Behind
+    pace_status: str = "On Track"
     avg_tasks_per_day: float = 0
+    risk_level: str = "Low"
+    risk_score: int = 0
