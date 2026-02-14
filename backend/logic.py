@@ -1,10 +1,12 @@
 from datetime import datetime, timezone
 from typing import List
-from models import Task, Project, ProjectDetail, TaskRead
+from models import Task, Project, ProjectDetail, TaskRead, MilestoneRead
 
 from services import calculate_risk_model
+from graph_engine import GraphEngine
+from forecasting import ForecastingModule
 
-def calculate_project_stats(project: Project) -> ProjectDetail:
+def calculate_project_stats(project: Project, session=None) -> ProjectDetail:
     now = datetime.utcnow()
     total_tasks = len(project.tasks)
     completed_tasks = [t for t in project.tasks if t.status]
@@ -19,13 +21,33 @@ def calculate_project_stats(project: Project) -> ProjectDetail:
     # Risk calculation
     risk_score, risk_level = calculate_risk_model(project)
     
+    # Phase 3: Dependency & Critical Path
+    # Fetch dependencies from DB if session is available
+    dependencies = []
+    if session:
+        from models import TaskDependency
+        from sqlmodel import select
+        # Extract task IDs
+        tids = [t.id for t in project.tasks]
+        if tids:
+            deps_data = session.exec(select(TaskDependency).where(TaskDependency.task_id.in_(tids))).all()
+            dependencies = [(d.task_id, d.depends_on_id) for d in deps_data]
+
+    critical_path, cp_duration, slack = GraphEngine.calculate_critical_path(project.tasks, dependencies)
+    
+    # Phase 3: Forecasting
+    forecast = ForecastingModule.calculate_forecast(project, cp_duration)
+    
+    # Phase 3: Bottlenecks
+    bottlenecks = ForecastingModule.detect_bottlenecks(project.tasks, dependencies, slack)
+    
     pace_status = "On Track"
-    if risk_level == "High": pace_status = "Behind"
-    elif risk_score < 20: pace_status = "Ahead"
+    if risk_level == "High" or forecast["delay_probability"] > 50: pace_status = "Behind"
+    elif risk_score < 20 and forecast["delay_probability"] < 10: pace_status = "Ahead"
 
     return ProjectDetail(
         **project.dict(),
-        tasks=[TaskRead(**t.dict()) for t in project.tasks],
+        tasks=[TaskRead(**t.dict(), dependency_ids=[d[1] for d in dependencies if d[0] == t.id]) for t in project.tasks],
         milestones=[MilestoneRead(**m.dict()) for m in project.milestones],
         total_tasks=total_tasks,
         completed_tasks=num_completed,
@@ -34,7 +56,11 @@ def calculate_project_stats(project: Project) -> ProjectDetail:
         pace_status=pace_status,
         avg_tasks_per_day=round(avg_tasks_per_day, 2),
         risk_level=risk_level,
-        risk_score=risk_score
+        risk_score=risk_score,
+        critical_path=critical_path,
+        forecast_completion=forecast["estimated_completion"],
+        delay_prob=forecast["delay_probability"],
+        bottlenecks=bottlenecks
     )
 
 def score_task(task: Task, available_hours: float) -> float:

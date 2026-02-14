@@ -55,12 +55,33 @@ class TaskBase(SQLModel):
     project_id: int = Field(foreign_key="project.id")
     milestone_id: Optional[int] = Field(default=None, foreign_key="milestone.id")
 
+class TaskDependency(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    task_id: int = Field(foreign_key="task.id")
+    depends_on_id: int = Field(foreign_key="task.id")
+
 class Task(TaskBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     completed_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     project: Project = Relationship(back_populates="tasks")
+    dependencies: List["Task"] = Relationship(
+        link_model=TaskDependency,
+        sa_relationship_kwargs={
+            "primaryjoin": "Task.id==TaskDependency.task_id",
+            "secondaryjoin": "Task.id==TaskDependency.depends_on_id",
+        }
+    )
+
+class ProjectForecast(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id")
+    estimated_completion: datetime
+    delay_probability: float
+    confidence_score: float
+    risk_trend: str # increasing, decreasing, stable
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class ProjectRead(ProjectBase):
     id: int
@@ -74,6 +95,7 @@ class TaskRead(TaskBase):
     id: int
     completed_at: Optional[datetime]
     created_at: datetime
+    dependency_ids: List[int] = []
 
 class ProjectDetail(ProjectRead):
     tasks: List[TaskRead] = []
@@ -86,3 +108,8 @@ class ProjectDetail(ProjectRead):
     avg_tasks_per_day: float = 0
     risk_level: str = "Low"
     risk_score: int = 0
+    # Phase 3 Fields
+    critical_path: List[int] = []
+    forecast_completion: Optional[datetime] = None
+    delay_prob: float = 0
+    bottlenecks: List[dict] = []

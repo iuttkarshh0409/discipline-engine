@@ -20,7 +20,7 @@ def calculate_risk_model(project: Project) -> Tuple[int, str]:
     current_velocity = num_completed / days_passed # tasks per day
     
     if days_left <= 0:
-        return 100, "High" if remaining_tasks > 0 else 0
+        return (100, "High") if remaining_tasks > 0 else (0, "Low")
     
     required_velocity = remaining_tasks / days_left
     
