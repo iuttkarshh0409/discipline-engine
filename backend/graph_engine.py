@@ -1,6 +1,8 @@
 from typing import List, Dict, Set, Tuple
 import collections
+import time
 from models import Task
+from logger import logger
 
 class GraphEngine:
     def __init__(self, tasks: List[Task]):
@@ -43,6 +45,7 @@ class GraphEngine:
 
     @staticmethod
     def calculate_critical_path(tasks: List[Task], dependencies: List[Tuple[int, int]]) -> Tuple[List[int], float, Dict[int, float]]:
+        start_time = time.time()
         adj, in_degree = GraphEngine.build_graph(tasks, dependencies)
         task_dict = {t.id: t for t in tasks}
         
@@ -88,5 +91,8 @@ class GraphEngine:
         slack = {tid: ls[tid] - es[tid] for tid in es}
         critical_path = [tid for tid, s in slack.items() if s <= 0.001]
         critical_path.sort(key=lambda tid: es[tid])
+        
+        execution_time = (time.time() - start_time) * 1000
+        logger.info(f"CPM Execution: tasks={len(tasks)}, duration={total_duration:.1f}h, time={execution_time:.2f}ms")
         
         return critical_path, float(total_duration), slack

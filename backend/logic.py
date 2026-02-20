@@ -2,9 +2,10 @@ from datetime import datetime, timezone
 from typing import List
 from models import Task, Project, ProjectDetail, TaskRead, MilestoneRead
 
-from services import calculate_risk_model
+from services import calculate_risk_model, score_task_v2
 from graph_engine import GraphEngine
 from forecasting import ForecastingModule
+from logger import logger
 
 def calculate_project_stats(project: Project, session=None) -> ProjectDetail:
     now = datetime.utcnow()
@@ -44,6 +45,18 @@ def calculate_project_stats(project: Project, session=None) -> ProjectDetail:
     pace_status = "On Track"
     if risk_level == "High" or forecast["delay_probability"] > 50: pace_status = "Behind"
     elif risk_score < 20 and forecast["delay_probability"] < 10: pace_status = "Ahead"
+
+    # Log top ranked tasks (Strategy Advisor hint)
+    scored_tasks = []
+    for t in project.tasks:
+        if not t.status:
+            score, _ = score_task_v2(t, project, available_hours=4.0) # Default 4h for logging
+            scored_tasks.append((t.title, score))
+    
+    if scored_tasks:
+        scored_tasks.sort(key=lambda x: x[1], reverse=True)
+        top_task, top_score = scored_tasks[0]
+        logger.info(f"Strategy: project={project.title}, top_task='{top_task}', score={top_score:.1f}")
 
     return ProjectDetail(
         **project.dict(),

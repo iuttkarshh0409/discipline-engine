@@ -1,7 +1,7 @@
-import collections
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from models import Project, Task, ProjectForecast
+from logger import logger
 
 class ForecastingModule:
     @staticmethod
@@ -51,6 +51,8 @@ class ForecastingModule:
         # Logic for risk trend
         # Ideally we'd compare with previous forecast
         risk_trend = "stable"
+        
+        logger.info(f"Forecast: project={project.title}, velocity={velocity:.2f} t/d, est_comp={est_completion.strftime('%Y-%m-%d')}, risk={delay_prob}%")
         
         return {
             "estimated_completion": est_completion,
