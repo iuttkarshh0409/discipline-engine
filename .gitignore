@@ -20,3 +20,6 @@ dist-ssr/
 # IDE
 .vscode/
 .idea/
+
+# Backend Logs
+backend/logs/
