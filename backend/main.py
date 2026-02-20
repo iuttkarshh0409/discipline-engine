@@ -8,6 +8,7 @@ from database import engine, create_db_and_tables, get_session
 from models import Project, ProjectBase, ProjectRead, Task, TaskBase, TaskRead, ProjectDetail, Milestone, MilestoneBase, MilestoneRead, BehaviorLog, TaskDependency
 from logic import calculate_project_stats
 from services import calculate_analytics, calculate_risk_model, score_task_v2
+from metrics import metrics
 
 from contextlib import asynccontextmanager
 
@@ -102,6 +103,10 @@ def get_ai_advice(project_id: int, available_hours: float, session: Session = De
     stats = calculate_project_stats(project, session=session)
     advice = AIService.get_advice(stats.dict(), available_hours)
     return advice
+
+@app.get("/metrics")
+def read_metrics():
+    return metrics.get_metrics()
 
 if __name__ == "__main__":
     import uvicorn

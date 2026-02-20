@@ -2,10 +2,12 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from models import Project, Task, ProjectForecast
 from logger import logger
+from metrics import metrics
 
 class ForecastingModule:
     @staticmethod
     def calculate_forecast(project: Project, critical_path_duration_hours: float) -> Dict[str, Any]:
+        metrics.increment("risk_evaluations")
         now = datetime.utcnow()
         completed_tasks = [t for t in project.tasks if t.status]
         pending_tasks = [t for t in project.tasks if not t.status]

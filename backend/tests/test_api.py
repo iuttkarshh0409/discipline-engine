@@ -33,3 +33,14 @@ def test_get_projects(client: TestClient):
 def test_project_not_found(client: TestClient):
     response = client.get("/projects/999")
     assert response.status_code == 404
+
+def test_metrics_endpoint(client: TestClient):
+    # Trigger some metrics
+    client.get("/projects")
+    
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "cpm_runs" in data
+    assert "tasks_scored" in data
+    assert "risk_evaluations" in data

@@ -3,6 +3,7 @@ import collections
 import time
 from models import Task
 from logger import logger
+from metrics import metrics
 
 class GraphEngine:
     def __init__(self, tasks: List[Task]):
@@ -45,6 +46,7 @@ class GraphEngine:
 
     @staticmethod
     def calculate_critical_path(tasks: List[Task], dependencies: List[Tuple[int, int]]) -> Tuple[List[int], float, Dict[int, float]]:
+        metrics.increment("cpm_runs")
         start_time = time.time()
         adj, in_degree = GraphEngine.build_graph(tasks, dependencies)
         task_dict = {t.id: t for t in tasks}

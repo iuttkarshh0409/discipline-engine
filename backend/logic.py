@@ -6,6 +6,7 @@ from services import calculate_risk_model, score_task_v2
 from graph_engine import GraphEngine
 from forecasting import ForecastingModule
 from logger import logger
+from metrics import metrics
 
 def calculate_project_stats(project: Project, session=None) -> ProjectDetail:
     now = datetime.utcnow()
@@ -50,6 +51,7 @@ def calculate_project_stats(project: Project, session=None) -> ProjectDetail:
     scored_tasks = []
     for t in project.tasks:
         if not t.status:
+            metrics.increment("tasks_scored")
             score, _ = score_task_v2(t, project, available_hours=4.0) # Default 4h for logging
             scored_tasks.append((t.title, score))
     
