@@ -20,6 +20,7 @@ import {
 import { format, differenceInDays } from 'date-fns';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+console.log("Engine connecting to:", API_BASE);
 
 function App() {
     const [project, setProject] = useState(null);
@@ -44,17 +45,20 @@ function App() {
 
     const fetchAllProjects = async () => {
         try {
+            setLoading(true);
             const res = await axios.get(`${API_BASE}/projects`);
             setProjects(res.data);
-            if (res.data.length > 0 && !project) {
+            if (res.data.length > 0) {
                 const latest = res.data.reduce((prev, current) => (prev.id > current.id) ? prev : current);
-                fetchProjectDetail(latest.id);
-            } else if (res.data.length === 0) {
+                await fetchProjectDetail(latest.id);
+            } else {
                 setShowProjectForm(true);
             }
         } catch (err) {
-            console.error(err);
+            console.error("Fetch Projects Error:", err);
             setError("Connect to backend to see your projects.");
+        } finally {
+            setLoading(false);
         }
     };
 
